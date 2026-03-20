@@ -11,6 +11,8 @@
 **/.DS_Store
 **/._.DS_Store
 .debs
+/.venv
+out.csv
 
 # Build files
 /build

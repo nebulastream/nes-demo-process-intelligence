@@ -42,6 +42,7 @@
     "ireeruntime",
     "libcuckoo",
     "libuuid",
+    "librdkafka",
     "magic-enum",
     "nameof",
     "nautilus",

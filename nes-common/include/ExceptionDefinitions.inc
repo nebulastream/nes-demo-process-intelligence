@@ -79,6 +79,7 @@ EXCEPTION(SkippingDelayedTaskDuringShutdown, 3004, "skipping delayed task during
 EXCEPTION(TuplesTooLargeForPipelineBufferSize, 3005, "tuples too large for pipeline buffer size")
 EXCEPTION(InferenceRuntime, 3006, "inference runtime error")
 EXCEPTION(ArithmeticalError, 3013, "arithmetical error")
+EXCEPTION(SinkWriteError, 3014, "failed to write to sink")
 
 /// 4XXX Errors interpreting data stream, sources and sinks
 EXCEPTION(CannotFormatSourceData, 4000, "cannot format source data")
