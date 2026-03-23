@@ -22,3 +22,22 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+  nes-worker:
+    image: nebulastream/nes-development:local-celonis
+    command: ./cmake-build-debug/nes-single-node-worker/nes-single-node-worker
+    working_dir: /tmp/nebulastream
+    volumes:
+      - ./:/tmp/nebulastream/
+  nes-cli:
+    image: nebulastream/nes-development:local-celonis
+    command: sleep infinity
+#    ./cmake-build-debug/nes-frontend/apps/nes-cli -d -s nes-worker:8080 -t query.yaml start
+    working_dir: /tmp/nebulastream
+    volumes:
+      - ./:/tmp/nebulastream/
+    depends_on:
+      - nes-worker
+  source:
+    build:
+      dockerfile: Dockerfile.source
+

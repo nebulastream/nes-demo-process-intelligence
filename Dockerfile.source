@@ -1,0 +1,4 @@
+FROM python:3.10
+WORKDIR /code
+COPY source.py /code/
+CMD ["python3", "-u", "source.py"]

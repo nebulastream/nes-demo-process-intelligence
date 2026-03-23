@@ -1,0 +1,41 @@
+query: |
+  SELECT ID AS ID, FIELD1 AS FIELD1, FIELD2 AS FIELD2
+  FROM VIDEO
+  INTO KAFKA_SINK;
+sinks:
+  - name: KAFKA_SINK
+    type: KAFKA
+    schema:
+      - name: ID
+        type: UINT64
+      - name: FIELD1
+        type: VARSIZED
+      - name: FIELD2
+        type: VARSIZED
+    config:
+      brokers: 'broker:29092'
+      topic: process-intelligence
+      output_format: JSON
+    parser_config: {}
+logical:
+  - name: VIDEO
+    schema:
+      - name: ID
+        type: UINT64
+      - name: FIELD1
+        type: VARSIZED
+      - name: FIELD2
+        type: VARSIZED
+physical:
+  - logical: VIDEO
+    type: TCP
+    parser_config:
+      type: CSV
+      tuple_delimiter: "\n"
+      field_delimiter: ","
+    source_config:
+      socket_host: source
+      socket_port: 8080
+      socket_buffer_size: 65536
+      flush_interval_ms: 100
+      connect_timeout_seconds: 60
