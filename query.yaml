@@ -1,5 +1,5 @@
 query: |
-  SELECT ID AS ID, FIELD1 AS FIELD1, FIELD2 AS FIELD2
+  SELECT ID AS ID, TIMESTAMP AS TIMESTAMP, WIDTH AS WIDTH, HEIGHT AS HEIGHT, DATA AS DATA
   FROM VIDEO
   INTO KAFKA_SINK;
 sinks:
@@ -8,9 +8,13 @@ sinks:
     schema:
       - name: ID
         type: UINT64
-      - name: FIELD1
-        type: VARSIZED
-      - name: FIELD2
+      - name: TIMESTAMP
+        type: UINT64
+      - name: WIDTH
+        type: UINT64
+      - name: HEIGHT
+        type: UINT64
+      - name: DATA
         type: VARSIZED
     config:
       brokers: 'broker:29092'
@@ -22,9 +26,13 @@ logical:
     schema:
       - name: ID
         type: UINT64
-      - name: FIELD1
-        type: VARSIZED
-      - name: FIELD2
+      - name: TIMESTAMP
+        type: UINT64
+      - name: WIDTH
+        type: UINT64
+      - name: HEIGHT
+        type: UINT64
+      - name: DATA
         type: VARSIZED
 physical:
   - logical: VIDEO

@@ -37,7 +37,21 @@ services:
       - ./:/tmp/nebulastream/
     depends_on:
       - nes-worker
+      - source
   source:
     build:
-      dockerfile: Dockerfile.source
-
+      context: datagen
+      dockerfile: docker/Dockerfile
+    image: datagen:local
+    container_name: source
+    restart: unless-stopped
+    environment:
+      DATAGEN_CONFIG: ${DATAGEN_CONFIG:-/app/config/config.yaml}
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+    volumes:
+      - ./datagen/config.yaml:/app/config/config.yaml:ro
+      - ./datagen/config.mqtt.yaml:/app/config/config.mqtt.yaml:ro
+      - ./datagen/data:/app/data:ro

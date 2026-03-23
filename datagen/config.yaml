@@ -3,19 +3,19 @@ period: 1000 # period length in ms
 chunk_size: 1000 # max tuples per send
 
 pattern:
-  - type: burst
-  - fraction: 0.5
-  - distribution: 0.5
+  - type: uniform
+  #- fraction: 0.5
+  #- distribution: 0.5
 
 data_source:
   #type: "csv"
   #file: "data/nexmark/bid.csv"
   # For image folders use:
   type: "image_folder"
-  file: "data/img"
+  file: "data/transistor"
   encoding: "base64" # or "hex"
 
-duration: 60
+duration: 6000
 host: "0.0.0.0"
 ports:
   - 8080

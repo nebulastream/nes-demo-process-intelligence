@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-docker exec -it -w /opt/kafka/bin broker sh ./kafka-console-consumer.sh --topic process-intelligence --bootstrap-server broker:29092
+docker compose exec -w /opt/kafka/bin broker sh ./kafka-console-consumer.sh --topic process-intelligence --bootstrap-server broker:29092
