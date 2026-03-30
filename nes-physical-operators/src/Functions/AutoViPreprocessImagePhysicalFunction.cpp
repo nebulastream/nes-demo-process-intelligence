@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <numeric>
 #include <span>
 #include <utility>
 #include <vector>
@@ -55,6 +56,12 @@ struct DecodedRgbImage
     std::vector<uint8_t> pixels;
 };
 
+struct ResampleContribution
+{
+    std::vector<size_t> indices;
+    std::vector<float> weights;
+};
+
 DecodedRgbImage decodePngToRgb(std::span<const std::byte> pngBytes)
 {
     png_image image{};
@@ -78,45 +85,114 @@ DecodedRgbImage decodePngToRgb(std::span<const std::byte> pngBytes)
     return {.width = image.width, .height = image.height, .pixels = std::move(pixels)};
 }
 
-float sampleRgbChannel(const DecodedRgbImage& image, const float srcX, const float srcY, const size_t channel)
+std::vector<ResampleContribution> computeTriangleContributions(const size_t inputExtent, const uint32_t outputExtent)
 {
-    const auto maxX = static_cast<int>(image.width) - 1;
-    const auto maxY = static_cast<int>(image.height) - 1;
-    const auto x0 = std::clamp(static_cast<int>(std::floor(srcX)), 0, maxX);
-    const auto y0 = std::clamp(static_cast<int>(std::floor(srcY)), 0, maxY);
-    const auto x1 = std::clamp(x0 + 1, 0, maxX);
-    const auto y1 = std::clamp(y0 + 1, 0, maxY);
+    constexpr float coordinateShift = 0.01F;
+    const auto scale = static_cast<float>(inputExtent) / static_cast<float>(outputExtent);
+    const auto filterScale = std::max(scale, 1.0F);
+    const auto support = filterScale;
 
-    const auto wx = srcX - static_cast<float>(x0);
-    const auto wy = srcY - static_cast<float>(y0);
-
-    const auto pixel = [&](const int x, const int y)
+    std::vector<ResampleContribution> contributions(outputExtent);
+    for (uint32_t outputIndex = 0; outputIndex < outputExtent; ++outputIndex)
     {
-        const auto offset = (static_cast<size_t>(y) * image.width + static_cast<size_t>(x)) * modelChannels + channel;
-        return static_cast<float>(image.pixels[offset]);
-    };
+        const auto center = (static_cast<float>(outputIndex) + 0.5F) * scale + coordinateShift;
+        const auto windowStart = static_cast<int>(center - support + 0.5F);
+        const auto windowEnd = static_cast<int>(center + support + 0.5F);
 
-    const auto top = pixel(x0, y0) * (1.0F - wx) + pixel(x1, y0) * wx;
-    const auto bottom = pixel(x0, y1) * (1.0F - wx) + pixel(x1, y1) * wx;
-    return top * (1.0F - wy) + bottom * wy;
+        auto& contribution = contributions[outputIndex];
+        for (int sample = windowStart; sample < windowEnd; ++sample)
+        {
+            const auto clampedSample = static_cast<size_t>(std::clamp(sample, 0, static_cast<int>(inputExtent) - 1));
+            const auto distance = (static_cast<float>(sample) + 0.5F - center) / filterScale;
+            const auto weight = std::max(0.0F, 1.0F - std::abs(distance));
+            if (weight > 0.0F)
+            {
+                contribution.indices.push_back(clampedSample);
+                contribution.weights.push_back(weight);
+            }
+        }
+
+        const auto weightSum = std::accumulate(contribution.weights.begin(), contribution.weights.end(), 0.0F);
+        for (auto& weight : contribution.weights)
+        {
+            weight /= weightSum;
+        }
+    }
+
+    return contributions;
+}
+
+void resizeRgbLikePillow(const DecodedRgbImage& image, std::vector<uint8_t>& resizedPixels)
+{
+    if (image.width == modelExtent && image.height == modelExtent)
+    {
+        resizedPixels = image.pixels;
+        return;
+    }
+
+    const auto horizontalContributions = computeTriangleContributions(image.width, modelExtent);
+    const auto verticalContributions = computeTriangleContributions(image.height, modelExtent);
+
+    std::vector<float> horizontallyResized(static_cast<size_t>(image.height) * modelExtent * modelChannels, 0.0F);
+    for (png_uint_32 y = 0; y < image.height; ++y)
+    {
+        for (uint32_t outputX = 0; outputX < modelExtent; ++outputX)
+        {
+            const auto& contribution = horizontalContributions[outputX];
+            for (size_t channel = 0; channel < modelChannels; ++channel)
+            {
+                auto value = 0.0F;
+                for (size_t i = 0; i < contribution.indices.size(); ++i)
+                {
+                    const auto inputX = contribution.indices[i];
+                    const auto inputOffset = (static_cast<size_t>(y) * image.width + inputX) * modelChannels + channel;
+                    value += static_cast<float>(image.pixels[inputOffset]) * contribution.weights[i];
+                }
+                const auto outputOffset = (static_cast<size_t>(y) * modelExtent + outputX) * modelChannels + channel;
+                horizontallyResized[outputOffset] = value;
+            }
+        }
+    }
+
+    resizedPixels.resize(static_cast<size_t>(modelExtent) * modelExtent * modelChannels);
+    for (uint32_t outputY = 0; outputY < modelExtent; ++outputY)
+    {
+        const auto& contribution = verticalContributions[outputY];
+        for (uint32_t outputX = 0; outputX < modelExtent; ++outputX)
+        {
+            for (size_t channel = 0; channel < modelChannels; ++channel)
+            {
+                auto value = 0.0F;
+                for (size_t i = 0; i < contribution.indices.size(); ++i)
+                {
+                    const auto inputY = contribution.indices[i];
+                    const auto inputOffset = (inputY * modelExtent + outputX) * modelChannels + channel;
+                    value += horizontallyResized[inputOffset] * contribution.weights[i];
+                }
+                const auto clampedValue = static_cast<uint8_t>(std::clamp(std::floor(value), 0.0F, 255.0F));
+                const auto outputOffset = (static_cast<size_t>(outputY) * modelExtent + outputX) * modelChannels + channel;
+                resizedPixels[outputOffset] = clampedValue;
+            }
+        }
+    }
 }
 
 void preprocessPngToAutoViTensor(int8_t* inputPtr, uint64_t inputSize, int8_t* outputPtr)
 {
     const auto image = decodePngToRgb(std::span<const std::byte>(reinterpret_cast<const std::byte*>(inputPtr), inputSize));
+    std::vector<uint8_t> resizedPixels;
+    resizeRgbLikePillow(image, resizedPixels);
 
     for (uint32_t y = 0; y < modelExtent; ++y)
     {
-        const auto srcY = ((static_cast<float>(y) + 0.5F) * static_cast<float>(image.height) / static_cast<float>(modelExtent)) - 0.5F;
         for (uint32_t x = 0; x < modelExtent; ++x)
         {
-            const auto srcX = ((static_cast<float>(x) + 0.5F) * static_cast<float>(image.width) / static_cast<float>(modelExtent)) - 0.5F;
             const auto baseIndex = static_cast<size_t>(y) * modelExtent + x;
 
             for (size_t channel = 0; channel < modelChannels; ++channel)
             {
-                const auto sampled = sampleRgbChannel(image, srcX, srcY, channel);
-                const auto value = sampled / 255.0F;
+                const auto pixelOffset = baseIndex * modelChannels + channel;
+                const auto value = static_cast<float>(resizedPixels[pixelOffset]) / 255.0F;
                 const auto tensorIndex = channel * modelExtent * modelExtent + baseIndex;
                 std::memcpy(outputPtr + tensorIndex * sizeof(float), &value, sizeof(value));
             }
