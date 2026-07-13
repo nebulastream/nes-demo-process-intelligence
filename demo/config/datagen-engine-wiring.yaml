@@ -1,5 +1,5 @@
 data_rate: 1
-period: 300
+period: 1000
 chunk_size: 1000
 
 pattern:
@@ -10,7 +10,7 @@ data_source:
   file: "demo/data/engine_wiring"
   encoding: "base64"
 
-duration: 6000
+duration: 60000000
 host: "0.0.0.0"
 ports:
   - 8080
